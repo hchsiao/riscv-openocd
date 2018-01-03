@@ -465,6 +465,8 @@ static uint64_t dmi_read(struct target *target, uint16_t address)
 		abort();
 	}
 
+  // HACK
+	LOG_DEBUG("dmi_read success, value=0x%lx", value);
 	return value;
 }
 
@@ -1091,6 +1093,8 @@ static int examine(struct target *target)
 		riscv_program_exec(&program32, target);
 
 		riscv_addr_t progbuf_addr = dmi_read(target, DMI_PROGBUF0) - 4;
+    // HACK
+    info->progbuf_addr = progbuf_addr;
 		if (get_field(dmi_read(target, DMI_ABSTRACTCS), DMI_ABSTRACTCS_CMDERR) != 0) {
 			LOG_ERROR("Unable to find the address of the program buffer on hart %d", i);
 			r->xlen[i] = -1;
@@ -1265,6 +1269,7 @@ static int deassert_reset(struct target *target)
 			}
 			target->state = TARGET_HALTED;
 		} while (get_field(dmstatus, DMI_DMSTATUS_ALLHALTED) == 0);
+	  target->debug_reason = DBG_REASON_DBGRQ;
 
 		control = set_field(control, DMI_DMCONTROL_HALTREQ, 0);
 		dmi_write(target, DMI_DMCONTROL, control);
@@ -1288,6 +1293,7 @@ static int deassert_reset(struct target *target)
 			}
 		} while (get_field(dmstatus, DMI_DMSTATUS_ALLRUNNING) == 0);
 		target->state = TARGET_RUNNING;
+	  target->debug_reason = DBG_REASON_NOTHALTED;
 	}
 	info->dmi_busy_delay = dmi_busy_delay;
 	return ERROR_OK;
@@ -2045,9 +2051,11 @@ void riscv013_set_autoexec(struct target *target, unsigned index, bool enabled)
 	}
 }
 
+// return type??? more like this?
 int riscv013_debug_buffer_register(struct target *target, riscv_addr_t addr)
 {
-	if (addr >= riscv013_data_addr(target))
+  // HACK
+	if (riscv013_data_addr(target) && addr >= riscv013_data_addr(target))
 		return DMI_DATA0 + (addr - riscv013_data_addr(target)) / 4;
 	else
 		return DMI_PROGBUF0 + (addr - riscv013_progbuf_addr(target)) / 4;
